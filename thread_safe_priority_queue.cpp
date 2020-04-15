@@ -2,6 +2,7 @@
 #include <thread>
 #include <future>
 #include <queue>
+#include <memory>
 
 template < typename T, typename Container, typename Compare>
 class thread_safe_priority_queque {
@@ -24,7 +25,14 @@ public:
 		val = std::move(data.top());
 		data.pop();
 	}
-};
+	
+	std::shared_ptr <T> pop() {
+		std::unique_lock <std::mutex> lock(m);
+		c.wait(lock, [this]{return !data.empty(); });
+		std::shared_ptr <T> res=data_queue.top();
+		data.pop();
+		return res;
+	};
 
 int main() {
 	thread_safe_priority_queque <int, std::vector<int>, std::greater<int>> q;
