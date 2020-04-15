@@ -5,6 +5,41 @@
 #include <future>
 #include <algorithm>
 
+std::mutex m;
+
+class Thread_Guard
+{
+public:
+
+	explicit Thread_Guard(std::thread& thread) noexcept :
+		m_thread(thread)
+	{}
+
+	Thread_Guard(const Thread_Guard&) = delete;
+
+	Thread_Guard& operator=(const Thread_Guard&) = delete;
+
+	~Thread_Guard() noexcept
+	{
+		try
+		{
+			if (m_thread.joinable())
+			{
+				m_thread.join();
+			}
+		}
+		catch (...)
+		{
+			// std::abort();
+		}
+	}
+
+private:
+
+	std::thread& m_thread;
+};
+
+
 std::string generate_str(int l) {
 	std::random_device rd;
 	std::mt19937 gen(rd());
@@ -26,47 +61,14 @@ std::string generate_str(int l) {
 	return s;
 }
 
-class stringPart {
-public:
-	stringPart(std::string s, int num) {
-		this->s = s;
-		this->start = num;
+void find_str(int first, int last, std::vector <int>& res, std::string& req, std::string& base) {
+	for (int i = base.find(req, first); (i < last) && (i != std::string::npos); i = base.find(req, i + 1)) {
+		std::lock_guard <std::mutex> lock(m);
+			res.push_back(i);
 	}
-
-	stringPart(const stringPart&) = delete;
-
-	std::vector<int> find(std::string req, int pos) {
-		std::vector<int> index;
-		int i = pos;
-		//std::lock_guard <std::mutex> lock(m);
-		m.lock();
-		for (i = s.find(req, i++); i != std::string::npos; i = s.find(req, i + 1))
-			index.push_back(start + i);
-		m.unlock();
-		return index;
-	}
-	int str_len() {
-		return s.length();
-	}
-private:
-	std::mutex m;
-	std::string s;
-	int start;
-};
-
-void part(std::vector<std::unique_ptr<stringPart>>& parts, std::string req, int i, std::vector<int>& res) {
-	std::vector <int> res0 = parts.at(i) -> find(req, 0);
-	for (int j = 1; j < req.length(); ++j) {
-		std::vector <int> res1 = parts.at(i) -> find(req.substr(0, j), parts.at(i) -> str_len() - req.length() - j);
-		std::vector <int> res2 = parts.at(i + 1) -> find(req.substr(j - 1, req.length() - j), 0);
-		if (!res1.empty() && !res2.empty())
-			if (res2.at(0) == 0)
-				res0.push_back(res1.at(0));
-	}
-	std::mutex m;
-	std::lock_guard <std::mutex> lock(m);
-	res.insert(res.end(), res0.begin(), res0.end());
 }
+
+
 
 int main() {
 	std::string base = generate_str(4000);
@@ -76,35 +78,21 @@ int main() {
 	int num_threads = std::thread::hardware_concurrency();
 	if (num_threads == 0)
 		num_threads = 2;
-	int all = required.length();
+	int all = base.length();
 	int block_size = all / num_threads;
 	std::vector < std::thread > threads(num_threads - 1);
-	std::vector <std::unique_ptr<stringPart>> parts(num_threads);
-	std::vector <int> res;
-	for (int i = 0; i < num_threads; ++i) {
-		//stringPart p(base.substr(i * block_size, block_size), i * block_size);
-		parts.push_back(std::make_unique<stringPart>(base.substr(i * block_size, block_size), i * block_size));
-		if (i == num_threads - 1)
-			//stringPart p1(base.substr(i * block_size, base.length() - (num_threads - 1) * block_size), i * block_size);
-			parts.push_back(std::make_unique<stringPart>(base.substr(i * block_size, base.length() - (num_threads - 1) * block_size), i * block_size));
+	std::vector < int > res;
+	for (int i = 0; i < num_threads - 1; ++i) {
+		threads[i] = std::thread(find_str, i * block_size, (i + 1) * block_size, std::ref(res), std::ref(required), std::ref(base));
+		Thread_Guard guard(threads[i]);
 	}
-	try {
-		for (int i = 0; i < (num_threads - 1); ++i) {
-			std::packaged_task <void(std::vector<std::unique_ptr<stringPart>>&, std::string, int, std::vector<int>&)> task(part);
-			threads[i] = std::thread(std::move(task), std::ref(parts), required, i, std::ref(res));
-		}
-		std::for_each(threads.begin(), threads.end(),
-			std::mem_fn(&std::thread::join));
-	}
-	catch (...) {
-		for (unsigned long i = 0; i < (num_threads - 1); ++i)
-		{
-			if (threads[i].joinable())
-				threads[i].join();
-		}
-		throw;
-	}
-	for (auto el : res)
-		std::cout << el << std::endl;
+
+	int j = 0;
+	std::vector < int > res_compare;
+	for (j = base.find(required, j++); j != std::string::npos; j = base.find(required, j + 1))
+		res_compare.push_back(j);
+
+	if (std::equal(res.begin(), res.end(), res_compare.begin()))
+		std::cout << "Programm works correct\n";
 	return 0;
 }
