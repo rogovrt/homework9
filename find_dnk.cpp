@@ -39,32 +39,28 @@ private:
 	std::thread& m_thread;
 };
 
-
-std::string generate_str(int l) {
+int generator() {
 	std::random_device rd;
 	std::mt19937 gen(rd());
 	std::uniform_int_distribution<> dis(0, 3);
-	std::string s;
-	for (int i = 0; i < l; ++i) {
-		int n = dis(gen);
-		switch (n) {
-		case 0:
-			s.push_back('A');
-		case 1:
-			s.push_back('G');
-		case 2:
-			s.push_back('T');
-		case 3:
-			s.push_back('C');
-		}
-	}
+	return dis(gen);
+}
+
+
+std::string generate_str(int l) {
+	std::string s(l, '4');
+	std::generate(s.begin(), s.end(), generator);
+	std::replace(s.begin(), s.end(), '0', 'A');
+	std::replace(s.begin(), s.end(), '1', 'G');
+	std::replace(s.begin(), s.end(), '2', 'T');
+	std::replace(s.begin(), s.end(), '3', 'C');
 	return s;
 }
 
-void find_str(int first, int last, std::vector <int>& res, std::string& req, std::string& base) {
+void find_str(int first, int last, std::vector <int>& res, const std::string& req, const std::string& base) {
 	for (int i = base.find(req, first); (i < last) && (i != std::string::npos); i = base.find(req, i + 1)) {
 		std::lock_guard <std::mutex> lock(m);
-			res.push_back(i);
+		res.push_back(i);
 	}
 }
 
@@ -83,7 +79,7 @@ int main() {
 	std::vector < std::thread > threads(num_threads - 1);
 	std::vector < int > res;
 	for (int i = 0; i < num_threads - 1; ++i) {
-		threads[i] = std::thread(find_str, i * block_size, (i + 1) * block_size, std::ref(res), std::ref(required), std::ref(base));
+		threads[i] = std::thread(find_str, i * block_size, (i + 1) * block_size, std::ref(res), std::cref(required), std::cref(base));
 		Thread_Guard guard(threads[i]);
 	}
 
