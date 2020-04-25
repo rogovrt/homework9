@@ -5,6 +5,8 @@
 #include <future>
 #include <mutex>
 #include <functional>
+#include <vector>
+#include <algorithm>
 
 class Result {
 public:
@@ -20,38 +22,6 @@ public:
 private:
     std::mutex m;
     int result = 0;
-};
-
-class Thread_Guard
-{
-public:
-
-    explicit Thread_Guard(std::thread& thread) noexcept :
-        m_thread(thread)
-    {}
-
-    Thread_Guard(const Thread_Guard&) = delete;
-
-    Thread_Guard& operator=(const Thread_Guard&) = delete;
-
-    ~Thread_Guard() noexcept
-    {
-        try
-        {
-            if (m_thread.joinable())
-            {
-                m_thread.join();
-            }
-        }
-        catch (...)
-        {
-            // std::abort();
-        }
-    }
-
-private:
-
-    std::thread& m_thread;
 };
 
 void part1(int block_size, Result& result) {
@@ -78,10 +48,11 @@ int main() {
     std::vector < std::thread > threads(num_threads - 1);
     Result res;
     for (int i = 0; i < (num_threads - 1); ++i) {
-        threads[i] = std::thread(part1, block_size, std::ref(res));
-        Thread_Guard guard(threads[i]);
+        threads.push_back(std::thread(part1, block_size, std::ref(res)));
     }
+    std::for_each(threads.begin(), threads.end(), std::mem_fn(&std::thread::join));
     part1(all - block_size * (num_threads - 1), res);
     std::cout << 4.0 * res.getResult() / all;
+    system("pause");
     return 0;
 }
